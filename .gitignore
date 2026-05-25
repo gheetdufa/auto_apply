@@ -1,0 +1,30 @@
+node_modules
+.next
+out
+.DS_Store
+*.log
+
+# build artifacts
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# secrets
+.env
+.env.local
+.env.*.local
+
+# local data
+data/db.sqlite
+data/db.sqlite-*
+data/db.sqlite-journal
+data/resume.pdf
+data/profile.md
+data/cache/
+
+# local tool state
+.claude/settings.local.json
+
+# playwright
+test-results/
+playwright-report/
+.playwright/

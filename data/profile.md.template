@@ -1,0 +1,55 @@
+# Profile
+
+> Copy this file to `data/profile.md` and fill in. This is the source of truth Claude uses when tailoring cover letters and screening answers. Be specific — generic profiles produce generic cover letters.
+
+## Snapshot
+
+- Name:
+- Pronouns:
+- Location (current):
+- Open to: SF Bay Area, NYC (and optionally remote-US)
+- Target role: New-grad Software Engineer
+- Graduation: (e.g., May 2026 — BS Computer Science @ University of Maryland)
+
+## Background
+
+(2-4 sentences. Who you are as an engineer. What you're good at. The shape of your experience.)
+
+## Achievements & projects
+
+(Bullet list. Be concrete: name the project, what it does, the impact/scale/result. Quantify where you can.)
+
+- Project 1 — what it is, what you built, the outcome
+- Project 2 — …
+- Project 3 — …
+
+## Internships / work experience
+
+- Company, role, dates — 1-2 lines on what you actually shipped
+- …
+
+## Technical strengths
+
+- Languages: (e.g., Python, Go, TypeScript)
+- Strong in: (e.g., backend systems, distributed systems, ML infra)
+- Comfortable: (e.g., React, SQL, AWS)
+- Currently learning:
+
+## What I'm looking for
+
+(2-4 sentences. The kind of team, the kind of work, the kind of problems. Be specific enough that Claude can reference it in cover letters.)
+
+## Dealbreakers
+
+(Anything that's a hard no — e.g., "no defense contractors", "no crypto", "no in-office 5 days in NYC". Helps Claude avoid recommending roles that don't fit when this expands later.)
+
+## Story / "why software"
+
+(1-2 paragraphs. The narrative arc. Helps cover letters feel human rather than templated.)
+
+## Logistics
+
+- Work authorization: (e.g., US citizen / no sponsorship needed)
+- Earliest start: (e.g., June 2026)
+- Comp expectations:
+- Relocation: (yes/no, where to)
