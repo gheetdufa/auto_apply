@@ -1,10 +1,14 @@
 import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import type { FormField } from "@/db/schema";
 
 const PROFILE_PATH = process.env.PROFILE_PATH ?? "./data/profile.md";
 const SCREENING_PATH = process.env.SCREENING_PATH ?? "./config/screening-answers.json";
 
 export type ScreeningAnswers = Record<string, string>;
+
+export function profileExists(): boolean {
+  return existsSync(PROFILE_PATH);
+}
 
 export function loadProfile(): string {
   if (!existsSync(PROFILE_PATH)) {
@@ -22,33 +26,21 @@ export function loadScreeningAnswers(): ScreeningAnswers {
 
 export const SYSTEM_PROMPT = `You are a job-application copilot for a new-grad software engineer.
 
-Given the candidate's profile and a job description, you produce:
+You receive the candidate's profile, a job description, and the ACTUAL fields of the application form (when available). You produce:
 1. A cover letter (Markdown, ~250 words, single page) — concrete, references specific things from the JD, no generic platitudes, no hyperbole, no "I am writing to apply for…" openings. Sound like the candidate, not a template.
-2. Tailored answers to ~8 standard screening questions a recruiter or application form would ask.
+2. An answer for each application-form field, in the same order the fields are given, using each field's label verbatim as the question.
 
-Rules:
-- If you don't have a fact, use "prefer not to say" or a brief honest deflection — never fabricate experience, certifications, or claims about the company.
-- Cover letter: lead with the most specific connection between the candidate and this role. One concrete project from their profile + one specific reason this company/role.
-- Screening answers: 1-3 sentences each. Plug in canonical answers from the candidate's screening config when relevant (work auth, comp, start date).
-- Output strict JSON only, no prose around it.
+Rules per field type:
+- Free-text / textarea: write the answer the candidate would type. 1-3 sentences for short questions; up to a short paragraph for "why us" / project questions. Ground every claim in the profile — never fabricate experience, numbers, or company knowledge.
+- Select: the answer MUST be exactly one of the provided options, character-for-character. Pick using the candidate's canonical screening answers (work auth, demographics, relocation, etc.). For demographic/EEOC questions choose the option matching the canonical answer (e.g. a "decline to answer" option when the canonical answer is "prefer not to say").
+- Multiselect: comma-separated subset of the provided options, verbatim.
+- Contact fields (name, email, phone, LinkedIn, website, location): fill from the profile if present; otherwise answer with an empty string — never invent contact info.
+- Attachment fields (resume, cover letter upload): answer with a short note like "attach data/resume.pdf" or "paste the cover letter above".
+- If you don't have a fact, use "prefer not to say" or a brief honest deflection — never fabricate.
 
-Output schema:
-{
-  "coverLetterMd": string,
-  "qa": [
-    { "question": string, "answer": string }
-  ]
-}
+Cover letter: lead with the most specific connection between the candidate and this role. One concrete project from their profile + one specific reason this company/role.
 
-The 8 screening questions to answer:
-1. "Why are you interested in {company}?"
-2. "Why this role specifically?"
-3. "What's your work authorization status?"
-4. "When can you start?"
-5. "What are your compensation expectations?"
-6. "Tell us about a project you're proud of and your specific contribution."
-7. "What programming languages and frameworks are you most comfortable with?"
-8. "Is there anything else you'd like the hiring team to know?"`;
+Style: NEVER use em dashes (—) or double/triple hyphens in any output. Use a comma, colon, period, or parentheses instead. This applies to the cover letter and every free-text answer.`;
 
 export function buildUserPrompt(args: {
   company: string;
@@ -56,6 +48,8 @@ export function buildUserPrompt(args: {
   locationRaw: string;
   jdText: string;
   screeningAnswers: ScreeningAnswers;
+  formFields: FormField[];
+  formSource: "greenhouse" | "fallback";
 }): string {
   return [
     `# Company: ${args.company}`,
@@ -67,9 +61,14 @@ export function buildUserPrompt(args: {
     JSON.stringify(args.screeningAnswers, null, 2),
     "```",
     ``,
+    args.formSource === "greenhouse"
+      ? `## Application form fields (the REAL form for this job — answer each one, in order)`
+      : `## Application form fields (standard questions — the real form wasn't retrievable)`,
+    "```json",
+    JSON.stringify(args.formFields, null, 2),
+    "```",
+    ``,
     `## Job description`,
     args.jdText.slice(0, 16000),
-    ``,
-    `Now produce the JSON output. JSON only.`,
   ].join("\n");
 }

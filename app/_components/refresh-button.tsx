@@ -10,12 +10,16 @@ export function RefreshButton() {
   const [status, setStatus] = useState<string | null>(null);
 
   async function refresh() {
-    setStatus("Ingesting…");
+    setStatus("Checking sources…");
     try {
       const res = await fetch("/api/refresh", { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "refresh failed");
-      setStatus(`+${data.newJobs} new · ${data.triagedJobs} triaged`);
+      setStatus(
+        data.backfill
+          ? `backfilled ${data.newJobs} jobs`
+          : `+${data.newJobs} new · ${data.drafted} drafted · ${data.closedJobs} closed`,
+      );
       startTransition(() => router.refresh());
     } catch (e) {
       setStatus(e instanceof Error ? e.message : "error");

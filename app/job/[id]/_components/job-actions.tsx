@@ -3,20 +3,20 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { JobStatus } from "@/db/schema";
-import { ExternalLink, FileText, Sparkles, Check, X } from "lucide-react";
+import { ExternalLink, FileText, Sparkles, Check, X, Rocket } from "lucide-react";
 
 export function JobActions({
   jobId,
   status,
   applyUrl,
-  hasJd,
   hasDraft,
+  canAutoApply,
 }: {
   jobId: number;
   status: JobStatus;
   applyUrl: string;
-  hasJd: boolean;
   hasDraft: boolean;
+  canAutoApply: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -29,30 +29,10 @@ export function JobActions({
     return data;
   }
 
-  async function fetchJd() {
-    setMsg("Fetching JD…");
+  async function run(label: string, fn: () => Promise<unknown>) {
+    setMsg(label);
     try {
-      await call(`/api/job/${jobId}/jd`, { method: "POST" });
-      setMsg(null);
-      startTransition(() => router.refresh());
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "error");
-    }
-  }
-  async function draft() {
-    setMsg("Generating…");
-    try {
-      await call(`/api/job/${jobId}/draft`, { method: "POST" });
-      setMsg(null);
-      startTransition(() => router.refresh());
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "error");
-    }
-  }
-  async function setStatus(next: JobStatus) {
-    setMsg(`Marking ${next}…`);
-    try {
-      await call(`/api/job/${jobId}/status`, { method: "POST", body: JSON.stringify({ status: next }) });
+      await fn();
       setMsg(null);
       startTransition(() => router.refresh());
     } catch (e) {
@@ -60,25 +40,46 @@ export function JobActions({
     }
   }
 
+  const enrich = () => run("Fetching JD + form…", () => call(`/api/job/${jobId}/enrich`, { method: "POST" }));
+  const draft = () => run("Drafting…", () => call(`/api/job/${jobId}/draft`, { method: "POST" }));
+  const autoApply = async (force = false) => {
+    setMsg("Applying — a browser window will open…");
+    try {
+      const res = await fetch(`/api/job/${jobId}/apply${force ? "?force=1" : ""}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = (await res.json().catch(() => ({}))) as { status?: string; message?: string; blocked?: string; error?: string };
+      if (res.status === 409 && data.blocked) {
+        if (window.confirm(`${data.blocked}\n\nApply anyway?`)) return autoApply(true);
+        setMsg("skipped (already applied to this company)");
+        return;
+      }
+      if (!res.ok) throw new Error(data.error ?? data.message ?? `HTTP ${res.status}`);
+      setMsg(data.message ?? data.status ?? "done");
+      startTransition(() => router.refresh());
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "error");
+    }
+  };
+  const setStatus = (next: JobStatus) =>
+    run(`Marking ${next}…`, () => call(`/api/job/${jobId}/status`, { method: "POST", body: JSON.stringify({ status: next }) }));
+
   return (
     <div className="flex items-center gap-2 text-sm">
       {msg && <span className="text-xs text-[color:var(--color-muted)]">{msg}</span>}
-      {!hasJd && (
-        <button onClick={fetchJd} disabled={pending} className={btn()}>
-          <FileText className="h-3.5 w-3.5" /> Fetch JD
+      <button onClick={enrich} disabled={pending} className={btn()}>
+        <FileText className="h-3.5 w-3.5" /> Fetch details
+      </button>
+      <button onClick={draft} disabled={pending} className={btn(hasDraft ? "default" : "accent")}>
+        <Sparkles className="h-3.5 w-3.5" /> {hasDraft ? "Regenerate" : "Generate Draft"}
+      </button>
+      {canAutoApply && (
+        <button onClick={() => autoApply()} disabled={pending || status === "applied"} className={btn("accent")}>
+          <Rocket className="h-3.5 w-3.5" /> Auto-apply
         </button>
       )}
-      {hasJd && !hasDraft && (
-        <button onClick={draft} disabled={pending} className={btn("accent")}>
-          <Sparkles className="h-3.5 w-3.5" /> Generate Draft
-        </button>
-      )}
-      {hasJd && hasDraft && (
-        <button onClick={draft} disabled={pending} className={btn()}>
-          <Sparkles className="h-3.5 w-3.5" /> Regenerate
-        </button>
-      )}
-      <a href={applyUrl} target="_blank" rel="noreferrer" className={btn("accent")}>
+      <a href={applyUrl} target="_blank" rel="noreferrer" className={btn()}>
         Open application <ExternalLink className="h-3.5 w-3.5" />
       </a>
       <button onClick={() => setStatus("applied")} disabled={pending || status === "applied"} className={btn("success")}>

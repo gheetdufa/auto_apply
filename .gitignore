@@ -19,7 +19,14 @@ data/db.sqlite-*
 data/db.sqlite-journal
 data/resume.pdf
 data/profile.md
+data/contact.json
+data/apply/
+data/watch.log
 data/cache/
+data/scout-state.json
+
+# personal resume copies at repo root
+Resume_*.pdf
 
 # local tool state
 .claude/settings.local.json

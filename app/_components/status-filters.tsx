@@ -1,30 +1,30 @@
 import Link from "next/link";
-import { JOB_STATUS, type JobStatus } from "@/db/schema";
 
-const LABELS: Record<JobStatus, string> = {
-  discovered: "Discovered",
-  triaged: "Triaged",
-  drafted: "Drafted",
+export const VIEWS = {
+  inbox: "Inbox",
   applied: "Applied",
   skipped: "Skipped",
   rejected: "Rejected",
   ghost: "Ghosted",
-};
+  closed: "Closed",
+} as const;
 
-export function StatusFilters({ current }: { current: JobStatus }) {
+export type ViewKey = keyof typeof VIEWS;
+
+export function StatusFilters({ current }: { current: ViewKey }) {
   return (
     <div className="flex gap-1 text-sm">
-      {JOB_STATUS.map((s) => (
+      {(Object.entries(VIEWS) as Array<[ViewKey, string]>).map(([key, label]) => (
         <Link
-          key={s}
-          href={`/?status=${s}`}
+          key={key}
+          href={key === "inbox" ? "/" : `/?view=${key}`}
           className={`rounded px-3 py-1.5 ${
-            current === s
+            current === key
               ? "bg-[color:var(--color-accent)] text-[color:var(--color-accent-fg)]"
               : "text-[color:var(--color-muted)] hover:bg-white/5"
           }`}
         >
-          {LABELS[s]}
+          {label}
         </Link>
       ))}
     </div>

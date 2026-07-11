@@ -1,9 +1,10 @@
 import type { AtsType } from "@/db/schema";
 
 const ATS_PATTERNS: Array<[RegExp, AtsType]> = [
-  [/(?:boards|job-boards)\.greenhouse\.io|grnh\.se/i, "greenhouse"],
-  [/jobs\.lever\.co/i, "lever"],
-  [/(?:jobs|app)\.ashbyhq\.com/i, "ashby"],
+  // gh_jid= is Greenhouse's embed param — company career pages with it are Greenhouse under the hood.
+  [/(?:boards|job-boards)(?:\.eu)?\.greenhouse\.io|grnh\.se|greenhouse\.io\/embed|[?&]gh_jid=/i, "greenhouse"],
+  [/jobs(?:\.eu)?\.lever\.co/i, "lever"],
+  [/ashbyhq\.com/i, "ashby"],
   [/myworkdayjobs\.com|workday\.com/i, "workday"],
   [/wellfound\.com|angel\.co/i, "wellfound"],
   [/linkedin\.com\/jobs/i, "linkedin"],

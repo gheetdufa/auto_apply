@@ -21,7 +21,14 @@ const MD_LINK = /\[([^\]]*)\]\(([^)]+)\)/g;
 const BARE_URL = /https?:\/\/[^\s<>"')]+/g;
 
 const SIMPLIFY_DOMAIN = /simplify\.jobs/i;
-const TRACKING_DOMAINS = /(?:utm_|click\.appcast|tracking\.cv|trk\.|jobright-tracking)/i;
+const TRACKER_HOSTS = /(?:click\.appcast|tracking\.cv|\btrk\.|jobright-tracking)/i;
+// Apply-badge images and other assets that must never be treated as apply links.
+const IMAGE_URL = /\.(?:png|jpe?g|gif|svg|webp|ico)(?:\?[^#\s]*)?$/i;
+const ASSET_HOSTS = /(?:i\.imgur\.com|img\.shields\.io|(?:raw|camo|user-images)\.githubusercontent\.com)/i;
+// Paths that look like an actual job posting rather than a company homepage.
+const JOB_PATH = /(?:[?&]gh_jid=|\/jobs?\/|\/careers?\/|\/positions?\/|\/openings?\/|\/postings?\/|\/apply\b|jobid=|requisition)/i;
+const KNOWN_ATS =
+  /(?:greenhouse\.io|grnh\.se|lever\.co|ashbyhq\.com|myworkdayjobs\.com|workday\.com|wellfound\.com|angel\.co|linkedin\.com\/jobs|smartrecruiters\.com|icims\.com|jobvite\.com|rippling\.com)/i;
 
 export function normalizeRow(headers: string[], cells: string[]): RawJobRow | null {
   const hMap = mapHeaders(headers);
@@ -84,24 +91,47 @@ function mapHeaders(headers: string[]): HeaderMap {
 }
 
 function pickBestUrl(cell: string): string {
+  const seen = new Set<string>();
   const urls: string[] = [];
-  for (const m of cell.matchAll(URL_IN_HREF)) urls.push(m[1]);
-  for (const m of cell.matchAll(MD_LINK)) urls.push(m[2]);
-  for (const m of cell.matchAll(BARE_URL)) urls.push(m[0]);
+  const push = (raw: string) => {
+    const u = cleanUrl(raw);
+    if (u && !seen.has(u)) {
+      seen.add(u);
+      urls.push(u);
+    }
+  };
+  for (const m of cell.matchAll(URL_IN_HREF)) push(m[1]);
+  for (const m of cell.matchAll(MD_LINK)) push(m[2]);
+  for (const m of cell.matchAll(BARE_URL)) push(m[0]);
 
-  const direct = urls.find((u) => !SIMPLIFY_DOMAIN.test(u) && !TRACKING_DOMAINS.test(u) && APPLY_TEXTS_OK(u));
-  if (direct) return cleanUrl(direct);
-  const anySimplify = urls.find((u) => SIMPLIFY_DOMAIN.test(u));
-  if (anySimplify) return cleanUrl(anySimplify);
-  return urls.length > 0 ? cleanUrl(urls[0]) : "";
+  // Never pick images/badges or tracker hosts.
+  const candidates = urls.filter((u) => !IMAGE_URL.test(u) && !ASSET_HOSTS.test(u) && !TRACKER_HOSTS.test(u));
+
+  // 1. Direct link on a known ATS domain.
+  const ats = candidates.find((u) => KNOWN_ATS.test(u));
+  if (ats) return ats;
+  // 2. Direct link whose path looks like a job posting (careers page, gh_jid embed, …).
+  const jobish = candidates.find((u) => JOB_PATH.test(u) && !SIMPLIFY_DOMAIN.test(u));
+  if (jobish) return jobish;
+  // 3. Simplify redirect — resolves to the real posting during enrichment.
+  const simplify = candidates.find((u) => SIMPLIFY_DOMAIN.test(u));
+  if (simplify) return simplify;
+  // 4. Whatever is left (likely a homepage) — better than nothing.
+  return candidates[0] ?? "";
 }
 
-function APPLY_TEXTS_OK(_u: string): boolean {
-  return true;
-}
-
-function cleanUrl(u: string): string {
-  return u.replace(/[)\]]+$/, "").trim();
+function cleanUrl(raw: string): string {
+  const u = raw.replace(/[)\]]+$/, "").trim();
+  // Strip utm_* noise so dedupe/ATS matching sees a stable URL.
+  try {
+    const parsed = new URL(u);
+    for (const k of [...parsed.searchParams.keys()]) {
+      if (/^utm_/i.test(k)) parsed.searchParams.delete(k);
+    }
+    return parsed.toString();
+  } catch {
+    return u;
+  }
 }
 
 function stripCell(cell: string): string {

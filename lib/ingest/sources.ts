@@ -56,6 +56,22 @@ export const SOURCES: RepoSource[] = [
     readmePath: "README.md",
     kind: "new-grad",
   },
+  {
+    key: "nuft-quant-2026",
+    owner: "northwesternfintech",
+    repo: "2026QuantInternships",
+    branch: "main",
+    readmePath: "README.md",
+    kind: "internship",
+  },
+  {
+    key: "nuft-quant-2027",
+    owner: "northwesternfintech",
+    repo: "2027QuantInternships",
+    branch: "main",
+    readmePath: "README.md",
+    kind: "internship",
+  },
 ];
 
 export function rawUrl(s: RepoSource): string {

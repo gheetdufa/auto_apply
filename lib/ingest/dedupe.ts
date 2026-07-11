@@ -25,3 +25,12 @@ export function dedupeKey(company: string, title: string, location: string): str
   const key = `${normalizeCompany(company)}|${normalizeTitle(title)}|${normalizeLocation(location)}`;
   return createHash("sha1").update(key).digest("hex").slice(0, 16);
 }
+
+/**
+ * Cross-source duplicate guard. Different sources write the same location
+ * differently ("SF" vs "San Francisco, California, United States"), which
+ * defeats the exact dedupeKey — so the coarse key buckets by location CLASS.
+ */
+export function coarseKey(company: string, title: string, locationClass: string): string {
+  return `${normalizeCompany(company)}|${normalizeTitle(title)}|${locationClass}`;
+}
