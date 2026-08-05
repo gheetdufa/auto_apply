@@ -17,13 +17,20 @@ next-env.d.ts
 data/db.sqlite
 data/db.sqlite-*
 data/db.sqlite-journal
+data/auto-apply.db
+data/auto-apply.db-*
 data/resume.pdf
+data/resume-internship.pdf
+data/transcript.pdf
+data/*Transcript*.pdf
+data/resumes/
 data/profile.md
 data/contact.json
 data/apply/
 data/watch.log
 data/cache/
 data/scout-state.json
+data/github-projects.json
 
 # personal resume copies at repo root
 Resume_*.pdf

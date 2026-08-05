@@ -10,7 +10,7 @@ Everything runs on your machine. The database, profile, resume, and application 
 |-------|----------------|
 | **Ingest** | Pulls 8 GitHub-maintained job lists (SimplifyJobs, speedyapply, NUFT quant repos, etc.), dedupes across sources, filters to SF / NYC / Remote-US SWE and quant roles |
 | **Scout** | Polls company ATS boards directly (Greenhouse, Lever, Ashby, SmartRecruiters, Workable), discovers YC startup boards, scans HN "Who's Hiring", and checks Remotive for remote early-career roles |
-| **Blocklist** | Drops mega-cap / big-tech companies at ingest time via `config/company-blocklist.json` (Amazon-tier and above) |
+| **Blocklist** | Drops mega-cap senior/generic roles via `config/company-blocklist.json`. **Early-career / new-grad / university titles are excepted** (NVIDIA new grad, Google Career Catalyst, etc. still surface) |
 | **Enrich** | Follows redirect URLs, detects the real ATS, fetches the job description, and pulls the actual application-form questions |
 | **Draft** | Claude writes a cover letter plus an answer for every form field, using your profile and canonical screening answers |
 | **Apply** | Playwright opens a headed browser, reads the live form, fills every field, attaches your resume, and submits (or stops before submit if `AUTO_SUBMIT=0`) |
@@ -40,7 +40,8 @@ The UI shows a setup banner until `.env.local`, `profile.md`, and `resume.pdf` e
 **One-time config files:**
 
 - `data/profile.md` — your background; drafts are grounded in this
-- `data/contact.json` — name, email, phone, LinkedIn, etc. (used by auto-apply for identity fields)
+- `data/contact.json` — name, email, phone, LinkedIn, GitHub, etc. (used by auto-apply for identity fields)
+- `data/github-projects.json` — role-tagged GitHub catalog from `pnpm github:sync` (optional; drafts pick better projects per role when present)
 - `config/screening-answers.json` — canonical answers for work auth, comp, start date, EEOC prefs (used verbatim on select fields)
 - `config/company-blocklist.json` — companies to exclude entirely (normalized name matching)
 
@@ -52,11 +53,12 @@ Every 15 minutes (launchd watcher) or on **Refresh** in the UI:
 
 1. **Ingest** fetches all source READMEs. Rows are filtered by title (SWE/quant, no sales/HR), location (SF, NYC, remote US, or quant hubs like Chicago/Austin for quant firms), and company blocklist. Jobs explicitly marked closed (🔒) in a source are closed immediately; jobs missing from every source for 24h+ are auto-closed.
 
-2. **Scout** runs four keyless discovery streams:
-   - **ATS boards**: polls boards for every known company (~140+ boards, thousands of postings per run). Catches postings before GitHub lists update.
+2. **Scout** runs five keyless discovery streams:
+   - **ATS boards**: polls boards for every known company (~140+ boards, thousands of postings per run). Catches postings before GitHub lists update. Mega-tech boards are polled too; only early-career titles pass the blocklist exception.
    - **YC discovery**: probes actively-hiring YC companies for Greenhouse/Lever/Ashby boards (20 companies per run, cached in `data/scout-state.json`).
    - **HN**: "Who is hiring" comments plus front-page YC job posts (Algolia + Claude extraction, at most 2×/day).
    - **Remotive**: remote-US software-dev feed, early-career filtered (at most 2×/day).
+   - **Google Careers**: early-career US SWE results pages (HTML), for roles like Career Catalyst that never hit Greenhouse or the GitHub lists (at most ~4×/day).
 
    Two admission tiers: titles that say new-grad/intern/junior get notify + auto-draft. Generic SWE titles at startups enter quietly ("ambient": visible in inbox, no API spend). A board's first poll seeds quietly; only deltas from already-watched boards count as new releases.
 
@@ -91,23 +93,26 @@ pnpm watcher:uninstall
 pnpm blocklist:sweep     # retroactively skip open jobs from blocklisted companies
 pnpm apply:dry <jobId>   # fill a form without submitting (sanity check)
 pnpm apply:batch         # batch apply to drafted jobs (--limit, --gap, --starred)
+pnpm github:sync         # pull public GitHub repos + tag them for role-aware project picks in drafts
 pnpm db:studio           # browse the DB
 ```
 
+`pnpm github:sync` writes `data/github-projects.json`. On each draft, the pipeline ranks those projects against the JD (e.g. quant roles prefer trading/market repos over a generic web app) and steers the cover letter / project answers accordingly. Re-run after you ship something new.
+
 ### Resume (LaTeX)
 
-Source lives in `resume/resume.tex` (Jake's Resume template). Compile with:
+Source lives in `resume/resume.tex` (Jake's Resume template). Two education variants:
+
+| File | When used | Education line |
+|------|-----------|----------------|
+| `data/resume.pdf` | new-grad / full-time | B.S., expected May 2027 |
+| `data/resume-internship.pdf` | internships | B.S./M.S., expected May 2028 |
 
 ```bash
-cd resume && tectonic resume.tex
+pnpm resume:build   # compiles both with tectonic → data/
 ```
 
-Copy the output to the apply path when ready:
-
-```bash
-cp resume/resume.pdf data/resume.pdf
-```
-
+Drafts and form fills for internship jobs use the May 2028 / B.S./M.S. framing automatically (screening answers + contact overrides). New-grad stays on May 2027.
 ## Sources
 
 Configured in `lib/ingest/sources.ts`:
@@ -129,9 +134,10 @@ db/                     Drizzle schema
 lib/
   pipeline.ts           ingest → scout → enrich → draft → notify
   ingest/               README fetchers, parsers, dedupe, blocklist, NUFT quant parser
-  scout/                ATS board polling, YC discovery, HN, Remotive
+  scout/                ATS board polling, YC discovery, HN, Remotive, Google Careers
   enrich/               per-job: finalUrl + ATS + JD + form questions
   tailor/               Claude draft generation (structured outputs)
+  github/               GitHub repo sync + role-affinity ranking for drafts
   apply/                Playwright auto-apply (live form extraction + fill)
   ats/                  ATS detection + form-question fetching
   jd/                   JD fetchers
@@ -158,6 +164,6 @@ scripts/
 
 ## Roadmap
 
-- **now:** watch → notify → real-form tailored drafts → Playwright auto-apply (Greenhouse, Lever, Ashby, most custom ATSes)
-- **next:** per-job tailored resume variants from the LaTeX source
+- **now:** watch → notify → real-form tailored drafts → Playwright auto-apply; GitHub project ranking; **per-job resume PDFs** (education track + project order + skill keyword surfacing)
+- **next:** richer per-bullet rewrites for experience when grounded in the JD
 - **later:** contact discovery, follow-up tracker

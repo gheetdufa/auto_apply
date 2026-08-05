@@ -49,14 +49,22 @@ export function JobActions({
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      const data = (await res.json().catch(() => ({}))) as { status?: string; message?: string; blocked?: string; error?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        status?: string;
+        message?: string;
+        blocked?: string;
+        error?: string;
+        debugLogPath?: string;
+      };
       if (res.status === 409 && data.blocked) {
         if (window.confirm(`${data.blocked}\n\nApply anyway?`)) return autoApply(true);
         setMsg("skipped (already applied to this company)");
         return;
       }
       if (!res.ok) throw new Error(data.error ?? data.message ?? `HTTP ${res.status}`);
-      setMsg(data.message ?? data.status ?? "done");
+      const base = data.message ?? data.status ?? "done";
+      setMsg(data.debugLogPath ? `${base} · log ${data.debugLogPath}` : base);
+      if (data.debugLogPath) console.info("[auto-apply] debug log:", data.debugLogPath);
       startTransition(() => router.refresh());
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "error");

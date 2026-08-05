@@ -131,6 +131,11 @@ export function greenhouseJobRef(url: string, html: string): { board: string; id
   const direct = url.match(/(?:boards|job-boards)(?:\.eu)?\.greenhouse\.io\/([^/?#]+)\/jobs\/(\d+)/i);
   if (direct) return { board: direct[1], id: direct[2] };
 
+  // Jane Street hosts Greenhouse behind its own domain — role/apply URLs embed
+  // the GH job id: janestreet.com/join-jane-street/apply/8631973002/
+  const janestreet = url.match(/janestreet\.com\/join-jane-street\/[a-z/-]*(\d{6,})/i);
+  if (janestreet) return { board: "janestreet", id: janestreet[1] };
+
   const embed = url.match(/greenhouse\.io\/embed\/job_app\?[^#]*for=([a-z0-9_-]+)[^#]*token=(\d+)/i);
   if (embed) return { board: embed[1], id: embed[2] };
 

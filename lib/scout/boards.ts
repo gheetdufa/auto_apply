@@ -5,36 +5,46 @@ import { SWE_TITLE_RE, NEGATIVE_TITLE_RE, QUANT_TITLE_RE, BACKFILL_THRESHOLD, up
 import { dedupeKey, coarseKey } from "@/lib/ingest/dedupe";
 import { classify, isTarget, isQuantHub } from "@/lib/ingest/location";
 import { isBlockedCompany } from "@/lib/ingest/blocklist";
+import { EARLY_CAREER_RE, SENIOR_TITLE_RE } from "@/lib/ingest/early-career";
+import {
+  greenhouseEmploymentType,
+  isEarlyCareerEmployment,
+  kindFromTitleOrEmployment,
+  titleWithEmployment,
+  type GhMeta,
+} from "@/lib/ats/employment";
 import { discoverYcBoards, getDiscoveredBoards, loadState, saveState, type DiscoverResult } from "./discover";
+import { WATCH_BOARDS } from "./watch-boards";
 import { loadCoarseKeys } from "./coarse";
 
 /**
- * Direct ATS board watcher. Boards come from two places:
- *  1. every company already in the DB (Greenhouse/Lever/Ashby/SmartRecruiters/
- *     Workable tokens parsed out of known job URLs), and
- *  2. YC-hiring-company discovery (see discover.ts) — startups whose boards we
- *     probed and confirmed.
+ * Direct ATS board watcher. Boards come from:
+ *  1. curated WATCH_BOARDS (Jane Street, Stripe, …),
+ *  2. every company already in the DB (GH/Lever/Ashby/SmartRecruiters/Workable),
+ *  3. YC hiring discovery + NUFT quant boards (see discover.ts).
  *
  * Two admission tiers per posting:
- *  - EXPLICIT: title says new grad / intern / junior / entry-level → full
- *    pipeline (notify + auto-draft).
- *  - AMBIENT (startup boards only): plain SWE title with no seniority marker —
- *    startups often hire juniors under generic titles. Inserted quietly
- *    (backfilled flag → visible in inbox, no notify/draft spend), capped/run.
+ *  - EXPLICIT: title OR Greenhouse Employment Type says new-grad / intern /
+ *    co-op / junior → full pipeline (notify + auto-draft).
+ *  - AMBIENT (startup boards only): plain SWE title with no seniority marker.
+ *
+ * Mega-tech boards stay on the watch list: early-career titles (and metadata)
+ * pass the blocklist exception; senior FAANG spray still gets dropped.
  */
 
 const UA = "auto-apply-scout/0.1";
 const TIMEOUT = AbortSignal.timeout.bind(AbortSignal);
 const AMBIENT_CAP_PER_RUN = 40;
 
-const EARLY_CAREER_RE =
-  /\b(new\s*grad|graduate|university|college|campus|early\s*career|entry[\s-]?level|junior|associate|intern(ship)?|engineer\s+i\b|swe\s+i\b|20(26|27))\b/i;
-const SENIOR_RE =
-  /\b(senior|staff|principal|lead|manager|director|head|vp|chief|architect|distinguished|experienced|ph\.?d|sr\.?|iii|iv|[4-9]\+?\s*(years|yrs))\b/i;
-
 type BoardAts = "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "workable";
 type Board = { ats: BoardAts; token: string; company: string; companyId?: number; startup?: boolean };
-type Posting = { title: string; locationRaw: string; applyUrl: string };
+type Posting = {
+  title: string;
+  locationRaw: string;
+  applyUrl: string;
+  /** Raw Greenhouse Employment Type when present. */
+  employmentType?: string | null;
+};
 
 export type ScoutBoardsResult = {
   boards: number;
@@ -48,18 +58,12 @@ export type ScoutBoardsResult = {
 };
 
 export async function scoutBoards(): Promise<ScoutBoardsResult> {
-  // Advance YC discovery a bounded step, then poll everything we know.
   const discovery = await discoverYcBoards().catch(() => undefined);
 
-  const boards = mergeBoards(await dbBoards(), getDiscoveredBoards()).filter(
-    (b) => !isBlockedCompany(b.company),
-  );
+  const boards = mergeBoards(WATCH_BOARDS, await dbBoards(), getDiscoveredBoards());
   const existingKeys = new Set(db.select({ k: jobs.dedupeKey }).from(jobs).all().map((r) => r.k));
   const coarseKeys = loadCoarseKeys();
 
-  // A board's FIRST poll sees its whole existing catalog — that's seeding, not
-  // releases. Only boards we've polled before produce genuine "new posting"
-  // events (notify + auto-draft); first-sight postings are inserted quietly.
   const state = loadState();
   const polled = new Set(state.polledBoards ?? []);
 
@@ -75,14 +79,22 @@ export async function scoutBoards(): Promise<ScoutBoardsResult> {
       const seeding = !polled.has(boardKey);
       if (r.value.fetched) polled.add(boardKey);
       postingsSeen += r.value.postings.length;
-      for (const posting of r.value.postings) {
-        const isQuant = QUANT_TITLE_RE.test(posting.title);
+      for (const raw of r.value.postings) {
+        const posting: Posting = {
+          ...raw,
+          title: titleWithEmployment(raw.title, raw.employmentType),
+        };
+        const admitBlob = `${raw.title} ${raw.employmentType ?? ""}`;
+        const isQuant = QUANT_TITLE_RE.test(admitBlob);
         if (NEGATIVE_TITLE_RE.test(posting.title) && !isQuant) continue;
-        if (!SWE_TITLE_RE.test(posting.title) && !isQuant) continue;
+        if (!SWE_TITLE_RE.test(admitBlob) && !isQuant) continue;
+        if (isBlockedCompany(r.value.board.company, { title: admitBlob })) continue;
         if (!isTarget(classify(posting.locationRaw)) && !(isQuant && isQuantHub(posting.locationRaw))) continue;
-        if (EARLY_CAREER_RE.test(posting.title)) {
+        const early =
+          EARLY_CAREER_RE.test(admitBlob) || isEarlyCareerEmployment(raw.employmentType);
+        if (early) {
           explicit.push({ board: r.value.board, posting, seeding });
-        } else if (r.value.board.startup && !SENIOR_RE.test(posting.title)) {
+        } else if (r.value.board.startup && !SENIOR_TITLE_RE.test(posting.title)) {
           ambient.push({ board: r.value.board, posting });
         }
       }
@@ -108,7 +120,6 @@ export async function scoutBoards(): Promise<ScoutBoardsResult> {
     else newJobIds.push(id);
   }
 
-  // Ambient tier: quiet inserts, capped so a newly-discovered board can't flood.
   let ambientNew = 0;
   for (const { board, posting } of ambient) {
     if (ambientNew >= AMBIENT_CAP_PER_RUN) break;
@@ -127,7 +138,7 @@ async function insertPosting(
   const key = dedupeKey(board.company, posting.title, posting.locationRaw);
   if (opts.existingKeys.has(key)) return null;
   const ck = coarseKey(board.company, posting.title, classify(posting.locationRaw));
-  if (opts.coarseKeys.has(ck)) return null; // same job, different location spelling
+  if (opts.coarseKeys.has(ck)) return null;
   opts.existingKeys.add(key);
   opts.coarseKeys.add(ck);
   const companyId = board.companyId ?? (await upsertCompany(board.company));
@@ -137,7 +148,7 @@ async function insertPosting(
     .values({
       companyId,
       title: posting.title,
-      kind: /intern(ship)?/i.test(posting.title) ? "internship" : "new-grad",
+      kind: kindFromTitleOrEmployment(posting.title, posting.employmentType),
       locationRaw: posting.locationRaw,
       locationClass: classify(posting.locationRaw),
       applyUrl: posting.applyUrl,
@@ -153,11 +164,15 @@ async function insertPosting(
   return inserted.id;
 }
 
-function mergeBoards(fromDb: Board[], discovered: Board[]): Board[] {
+function mergeBoards(...groups: Board[][]): Board[] {
   const seen = new Map<string, Board>();
-  for (const b of [...fromDb, ...discovered]) {
-    const key = `${b.ats}:${b.token.toLowerCase()}`;
-    if (!seen.has(key)) seen.set(key, b);
+  for (const group of groups) {
+    for (const b of group) {
+      const key = `${b.ats}:${b.token.toLowerCase()}`;
+      const prev = seen.get(key);
+      // Prefer non-startup (watch list) over ambient-capable startup boards.
+      if (!prev || (prev.startup && b.startup === false)) seen.set(key, b);
+    }
   }
   return [...seen.values()];
 }
@@ -184,22 +199,25 @@ async function dbBoards(): Promise<Board[]> {
   for (const r of rows) {
     for (const url of [r.finalUrl, r.applyUrl]) {
       if (!url) continue;
+      if (/janestreet\.com\/join-jane-street/i.test(url)) {
+        add("greenhouse", "janestreet", r);
+        break;
+      }
       const gh = url.match(/(?:boards|job-boards)(?:\.eu)?\.greenhouse\.io\/(?:embed\/job_app\?for=)?([a-z0-9_-]+)/i);
-      if (gh && r.ats === "greenhouse" && gh[1] !== "embed") {
+      if (gh && (r.ats === "greenhouse" || r.ats === "custom") && gh[1] !== "embed") {
         add("greenhouse", gh[1], r);
         break;
       }
       const lv = url.match(/jobs(?:\.eu)?\.lever\.co\/([^/?#]+)/i);
-      if (lv && r.ats === "lever") {
+      if (lv && (r.ats === "lever" || r.ats === "custom")) {
         add("lever", lv[1], r);
         break;
       }
       const ab = url.match(/jobs\.ashbyhq\.com\/([^/?#]+)/i);
-      if (ab && r.ats === "ashby") {
+      if (ab && (r.ats === "ashby" || r.ats === "custom")) {
         add("ashby", ab[1], r);
         break;
       }
-      // SmartRecruiters/Workable live under ats_type='custom' — mine the URLs.
       const sr = url.match(/(?:jobs|careers)\.smartrecruiters\.com\/([^/?#]+)/i);
       if (sr && !/^(www|api)$/i.test(sr[1])) {
         add("smartrecruiters", sr[1], r);
@@ -220,7 +238,14 @@ async function fetchBoard(board: Board): Promise<{ board: Board; postings: Posti
   if (board.ats === "greenhouse") {
     const res = await fetch(`https://boards-api.greenhouse.io/v1/boards/${board.token}/jobs`, opts);
     if (!res.ok) return { board, postings: [], fetched: false };
-    const data = (await res.json()) as { jobs?: Array<{ title: string; absolute_url: string; location?: { name?: string } }> };
+    const data = (await res.json()) as {
+      jobs?: Array<{
+        title: string;
+        absolute_url: string;
+        location?: { name?: string };
+        metadata?: GhMeta[];
+      }>;
+    };
     return {
       board,
       fetched: true,
@@ -228,6 +253,7 @@ async function fetchBoard(board: Board): Promise<{ board: Board; postings: Posti
         title: j.title,
         locationRaw: j.location?.name ?? "",
         applyUrl: j.absolute_url,
+        employmentType: greenhouseEmploymentType(j.metadata),
       })),
     };
   }
@@ -277,7 +303,6 @@ async function fetchBoard(board: Board): Promise<{ board: Board; postings: Posti
       })),
     };
   }
-  // workable
   const res = await fetch(`https://apply.workable.com/api/v1/widget/accounts/${board.token}`, opts);
   if (!res.ok) return { board, postings: [], fetched: false };
   const data = (await res.json()) as {

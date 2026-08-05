@@ -57,8 +57,20 @@ async function main() {
       console.log(`  ${result.status === "submitted" ? "✅" : "⚠️ "} ${result.status}: ${result.message}`);
       if (result.status === "submitted") submitted += 1;
       if (result.status === "needs_attention") {
-        console.log("\nBatch paused — finish this one in the open browser window, then rerun.");
-        break;
+        if (!result.assist) {
+          console.log("\nBatch paused — finish this one in the open browser window, then rerun.");
+          break;
+        }
+        // Exiting here would kill the open window AND the watcher — wait for
+        // the manual finish (email code auto-fills) before moving on.
+        console.log("  ⏳ finish this one in the open browser window — watching it (email code auto-fills)…");
+        const fin = await result.assist;
+        if (!fin) {
+          console.log("\nBatch stopped — window closed or watch timed out; rerun when done.");
+          break;
+        }
+        submitted += 1;
+        console.log("  ✅ finished in the window — recorded as submitted");
       }
     } catch (e) {
       console.log(`  ❌ ${e instanceof Error ? e.message : String(e)}`);

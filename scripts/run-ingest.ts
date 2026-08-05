@@ -26,6 +26,11 @@ async function main() {
   if (scout.remote && !scout.remote.skipped) {
     console.log(`  scout remote: ${scout.remote.seen} postings · +${scout.remote.newJobIds.length} new · +${scout.remote.seeded} seeded`);
   }
+  if (scout.google && !scout.google.skipped) {
+    console.log(
+      `  scout google: ${scout.google.seen} early-career cards · +${scout.google.newJobIds.length} new · +${scout.google.seeded} seeded`,
+    );
+  }
   if (scout.error) console.log(`  scout error: ${scout.error}`);
   console.log(`  closed:      ${ingest.closedJobs}`);
   console.log(`  enriched:    ${enriched} · drafted: ${drafted} · notified: ${notified}`);

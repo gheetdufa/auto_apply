@@ -5,6 +5,7 @@ import { runIngest, type IngestResult } from "@/lib/ingest/run";
 import { scoutBoards, type ScoutBoardsResult } from "@/lib/scout/boards";
 import { scoutHn, type ScoutHnResult } from "@/lib/scout/hn";
 import { scoutRemote, type ScoutRemoteResult } from "@/lib/scout/remote";
+import { scoutGoogleCareers, type ScoutGoogleResult } from "@/lib/scout/google";
 import { enrichJob } from "@/lib/enrich";
 import { draftJobById } from "@/lib/tailor/draft-job";
 import { tailoringReady } from "@/lib/tailor/generate";
@@ -12,7 +13,13 @@ import { notifyMac } from "@/lib/notify";
 
 export type PipelineResult = {
   ingest: IngestResult;
-  scout: { boards?: ScoutBoardsResult; hn?: ScoutHnResult; remote?: ScoutRemoteResult; error?: string };
+  scout: {
+    boards?: ScoutBoardsResult;
+    hn?: ScoutHnResult;
+    remote?: ScoutRemoteResult;
+    google?: ScoutGoogleResult;
+    error?: string;
+  };
   enriched: number;
   drafted: number;
   draftErrors: string[];
@@ -43,6 +50,9 @@ export async function runPipeline(opts: { notify: boolean }): Promise<PipelineRe
     const remote = await scoutRemote();
     result.scout.remote = remote;
     newIds.push(...remote.newJobIds);
+    const google = await scoutGoogleCareers();
+    result.scout.google = google;
+    newIds.push(...google.newJobIds);
   } catch (e) {
     result.scout.error = e instanceof Error ? e.message : String(e);
   }

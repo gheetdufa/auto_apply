@@ -3,12 +3,14 @@ import { jobs, companies, jobDescriptions, applicationForms, drafts } from "@/db
 import { eq } from "drizzle-orm";
 import { enrichJob } from "@/lib/enrich";
 import { generateDraft } from "./generate";
+import { tailorResumeForJob } from "@/lib/resume/compile-job";
 
 /**
  * Generate and store a tailored draft for a job. Enriches first if the JD
- * hasn't been fetched yet. Used by both the watcher (auto-draft) and the UI.
+ * hasn't been fetched yet. Also compiles a per-job resume PDF (education
+ * track + project ranking + skill keyword order).
  */
-export async function draftJobById(jobId: number): Promise<{ draftId: number }> {
+export async function draftJobById(jobId: number): Promise<{ draftId: number; resumePath?: string }> {
   let [row] = await loadJob(jobId);
   if (!row) throw new Error("job not found");
 
@@ -24,6 +26,7 @@ export async function draftJobById(jobId: number): Promise<{ draftId: number }> 
     title: row.title,
     locationRaw: row.locationRaw,
     jdText: row.jd,
+    kind: row.kind,
     formFields: row.formFields,
     formSource: row.formSource ?? "fallback",
   });
@@ -33,7 +36,25 @@ export async function draftJobById(jobId: number): Promise<{ draftId: number }> 
     .values({ jobId, coverLetterMd: result.coverLetterMd, qaJson: result.qa, model })
     .returning({ id: drafts.id });
   await db.update(jobs).set({ status: "drafted", updatedAt: new Date() }).where(eq(jobs.id, jobId));
-  return { draftId: inserted.id };
+
+  let resumePath: string | undefined;
+  try {
+    const art = tailorResumeForJob({
+      jobId,
+      kind: row.kind,
+      title: row.title,
+      jdText: row.jd,
+      llmPlan: result.resumePlan,
+    });
+    resumePath = art.pdfPath;
+  } catch (e) {
+    console.warn(
+      `[draft] resume tailor failed for job ${jobId}:`,
+      e instanceof Error ? e.message : e,
+    );
+  }
+
+  return { draftId: inserted.id, resumePath };
 }
 
 function loadJob(jobId: number) {
@@ -41,6 +62,7 @@ function loadJob(jobId: number) {
     .select({
       jobId: jobs.id,
       title: jobs.title,
+      kind: jobs.kind,
       locationRaw: jobs.locationRaw,
       company: companies.name,
       jd: jobDescriptions.text,

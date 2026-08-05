@@ -17,7 +17,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const result = await runApplyForJob(id, { force });
     if ("blocked" in result) return NextResponse.json({ blocked: result.blocked }, { status: 409 });
-    return NextResponse.json(result, { status: result.status === "error" ? 500 : 200 });
+    // The assist watcher keeps running in the server process (auto-filling the
+    // email code after a manual finish) — don't serialize the promise.
+    const { assist: _assist, ...payload } = result;
+    void _assist;
+    return NextResponse.json(payload, { status: payload.status === "error" ? 500 : 200 });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }

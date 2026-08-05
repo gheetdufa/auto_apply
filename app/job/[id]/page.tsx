@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { existsSync } from "node:fs";
 import { db } from "@/db";
 import { jobs, companies, jobDescriptions, applicationForms, drafts, applications } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { JobActions } from "./_components/job-actions";
 import { DraftEditor } from "./_components/draft-editor";
 import { ChevronLeft, ExternalLink } from "lucide-react";
+import { jobResumePdfPath, loadJobResumeMeta } from "@/lib/resume/compile-job";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,16 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
     .limit(1);
 
   const applyHref = row.finalUrl ?? row.applyUrl;
+  const tailored = existsSync(jobResumePdfPath(id));
+  const meta = loadJobResumeMeta(id);
+  const resumeLabel = tailored
+    ? row.kind === "internship"
+      ? "Tailored for this job — B.S./M.S., May 2028"
+      : "Tailored for this job — B.S., May 2027"
+    : row.kind === "internship"
+      ? "Track default — B.S./M.S., May 2028 (Generate Draft to tailor)"
+      : "Track default — B.S., May 2027 (Generate Draft to tailor)";
+  const resumeSrc = `/api/resume/job/${id}`;
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-6">
@@ -84,6 +96,55 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
           <span>· first seen {row.firstSeenAt.toLocaleDateString()}</span>
         </div>
       </header>
+
+      <section className="mb-5 rounded-lg border bg-[color:var(--color-panel)] overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 text-xs">
+          <div>
+            <span className="uppercase text-[color:var(--color-muted)]">Resume to attach</span>
+            <span className="ml-2 text-[color:var(--color-fg)]">{resumeLabel}</span>
+            {tailored && (
+              <span className="ml-2 rounded bg-[color:var(--color-success)]/10 px-1.5 py-0.5 text-[10px] text-[color:var(--color-success)]">
+                per-job
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <a href={resumeSrc} target="_blank" rel="noreferrer" className="text-[color:var(--color-accent)] hover:underline">
+              open PDF
+            </a>
+            <Link href="/resume" className="text-[color:var(--color-muted)] hover:text-[color:var(--color-accent)]">
+              stock variants
+            </Link>
+          </div>
+        </div>
+        {meta && (
+          <ul className="border-b px-4 py-2 text-[11px] text-[color:var(--color-muted)] space-y-0.5">
+            {meta.rationale.map((r, i) => (
+              <li key={i}>· {r}</li>
+            ))}
+          </ul>
+        )}
+        {meta?.bulletDiffs && meta.bulletDiffs.length > 0 && (
+          <details className="border-b px-4 py-2 text-[11px]">
+            <summary className="cursor-pointer text-[color:var(--color-muted)] hover:text-[color:var(--color-fg)]">
+              {meta.bulletDiffs.length} bullet{meta.bulletDiffs.length === 1 ? "" : "s"} rewritten for
+              this JD — review before applying
+            </summary>
+            <div className="mt-2 space-y-2">
+              {meta.bulletDiffs.map((d, i) => (
+                <div key={i} className="rounded border bg-black/20 px-3 py-2">
+                  <div className="text-[10px] uppercase text-[color:var(--color-muted)]">{d.project}</div>
+                  <div className="mt-1 text-[color:var(--color-muted)] line-through decoration-white/30">
+                    {d.original}
+                  </div>
+                  <div className="mt-0.5">{d.rewritten}</div>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+        <iframe src={`${resumeSrc}#toolbar=0&navpanes=0`} title={resumeLabel} className="h-[70vh] w-full bg-white" />
+      </section>
 
       {application && (
         <section className="mb-5 rounded-lg border border-[color:var(--color-success)]/30 bg-[color:var(--color-success)]/5">

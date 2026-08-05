@@ -3,6 +3,7 @@ import { jobs } from "@/db/schema";
 import { upsertCompany, NEGATIVE_TITLE_RE } from "@/lib/ingest/run";
 import { dedupeKey, coarseKey } from "@/lib/ingest/dedupe";
 import { isBlockedCompany } from "@/lib/ingest/blocklist";
+import { EARLY_CAREER_RE } from "@/lib/ingest/early-career";
 import { detectAts } from "@/lib/ats/detect";
 import { loadState, saveState } from "./discover";
 import { loadCoarseKeys } from "./coarse";
@@ -17,7 +18,6 @@ import { loadCoarseKeys } from "./coarse";
 const FEED = "https://remotive.com/api/remote-jobs?category=software-dev&limit=400";
 const MIN_INTERVAL_MS = 12 * 60 * 60 * 1000;
 
-const EARLY_RE = /\b(new\s*grad|graduate|university|college|early\s*career|entry[\s-]?level|junior|associate|intern(ship)?|engineer\s+i\b)\b/i;
 const US_OK_RE = /\b(usa|united states|u\.s\.|americas|worldwide|anywhere|northern america)\b/i;
 
 export type ScoutRemoteResult = { skipped: boolean; seen: number; newJobIds: number[]; seeded: number };
@@ -42,9 +42,9 @@ export async function scoutRemote(): Promise<ScoutRemoteResult> {
   let seeded = 0;
 
   for (const j of data.jobs ?? []) {
-    if (!EARLY_RE.test(j.title)) continue;
+    if (!EARLY_CAREER_RE.test(j.title)) continue;
     if (NEGATIVE_TITLE_RE.test(j.title)) continue;
-    if (isBlockedCompany(j.company_name)) continue;
+    if (isBlockedCompany(j.company_name, { title: j.title })) continue;
     const loc = j.candidate_required_location ?? "";
     if (loc && !US_OK_RE.test(loc)) continue; // must allow US candidates
     const locationRaw = loc ? `Remote (${loc})` : "Remote, US";

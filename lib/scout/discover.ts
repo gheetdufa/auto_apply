@@ -27,6 +27,7 @@ export type DiscoveredBoard = {
 type ScoutState = {
   lastHnScanAt?: number;
   lastRemoteScanAt?: number;
+  lastGoogleScanAt?: number;
   lastYcFetchAt?: number;
   ycQueue?: Array<{ name: string; slug: string; website?: string }>;
   /** company slug → discovered board, or null when all probes missed */

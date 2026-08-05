@@ -15,10 +15,13 @@ export function RefreshButton() {
       const res = await fetch("/api/refresh", { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "refresh failed");
+      const srcCount = Array.isArray(data.sources) ? data.sources.length : null;
       setStatus(
         data.backfill
-          ? `backfilled ${data.newJobs} jobs`
-          : `+${data.newJobs} new · ${data.drafted} drafted · ${data.closedJobs} closed`,
+          ? `backfilled ${data.newJobs} jobs${srcCount != null ? ` · ${srcCount} sources` : ""}`
+          : `+${data.newJobs} new · ${data.drafted} drafted · ${data.closedJobs} closed${
+              srcCount != null ? ` · ${srcCount} sources` : ""
+            }`,
       );
       startTransition(() => router.refresh());
     } catch (e) {

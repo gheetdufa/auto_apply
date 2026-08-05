@@ -1,7 +1,8 @@
 %-------------------------
 % Resume in LaTeX — Dheer Guda
 % Based on Jake Gutierrez's template (MIT), ATS-friendly
-% Compile with: pdflatex resume.tex
+% Compile: tectonic resume.tex
+% Internship (B.S./M.S., May 2028): tectonic resume-internship.tex
 %-------------------------
 
 \documentclass[letterpaper,10pt]{article}
@@ -90,13 +91,20 @@
 \end{center}
 
 %-----------EDUCATION-----------
+\ifdefined\internshipmode
+  \newcommand{\DegreeLine}{B.S./M.S. in Computer Science \& Math, Minor in Business Analytics \& Data Science}
+  \newcommand{\GradLine}{Expected Graduation, May 2028}
+\else
+  \newcommand{\DegreeLine}{B.S. in Computer Science \& Math, Minor in Business Analytics \& Data Science}
+  \newcommand{\GradLine}{Expected Graduation, May 2027}
+\fi
 \section{Education}
   \resumeSubHeadingListStart
     \resumeSubheading
       {University of Maryland College Park}{College Park, Maryland}
-      {B.S. in Computer Science \& Math, Minor in Business Analytics \& Data Science}{Expected Graduation, May 2027}
+      {\DegreeLine}{\GradLine}
       \resumeItemListStart
-        \resumeItem{\textbf{Honors:} Dean's List, QUEST Honors Program, Startup Shell Grant Winner}
+        \resumeItem{\textbf{Honors:} Dean's List, QUEST Honors Program, Telora Fellowship S25, Startup Shell Grant Winner}
         \resumeItem{\textbf{Related Coursework:} Data Structures \& Algorithms, Operating Systems, Database Design, Machine Learning, Artificial Intelligence, Software Engineering, Probability \& Statistics}
       \resumeItemListEnd
   \resumeSubHeadingListEnd
@@ -159,19 +167,19 @@
   \resumeSubHeadingListStart
 
     \resumeSubheading
+      {auto-trader}{College Park, Maryland}
+      {Automated Swing-Trading System}{}
+      \resumeItemListStart
+        \resumeItem{Built a deterministic Python signals engine (momentum / RSI(2) / SPY regime filter) with inverse-volatility weighting, ATR trailing stops, and ring-fenced stock + options sleeves.}
+        \resumeItem{Designed a reviewer/executor agent workflow that proposes orders as JSON, applies hard validation, and executes PASS trades via Robinhood Agentic MCP with journaled fills.}
+      \resumeItemListEnd
+
+    \resumeSubheading
       {Audit.AI (Bitcamp 2024 Hackathon Winner)}{College Park, Maryland}
       {Full Stack Developer}{}
       \resumeItemListStart
         \resumeItem{Built a YOLOv6-based multimodal ML system using Python and PyTorch to detect misinformation at scale.}
         \resumeItem{Engineered scalable backend with MongoDB and Redis caching for real-time media auditing, earning best overall hack.}
-      \resumeItemListEnd
-
-    \resumeSubheading
-      {askTestudo}{Georgetown, Maryland}
-      {Lead Backend Developer}{}
-      \resumeItemListStart
-        \resumeItem{Trained an LLM chatbot with Azure OpenAI \& Retrieval-Augmented Generation (RAG) for precise query handling.}
-        \resumeItem{Integrated vector search indexing, multimodal video responses, and chat UI in a React/FastAPI/MongoDB app.}
       \resumeItemListEnd
 
   \resumeSubHeadingListEnd

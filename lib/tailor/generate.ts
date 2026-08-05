@@ -1,15 +1,17 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import type { FormField } from "@/db/schema";
-import { SYSTEM_PROMPT, buildUserPrompt, loadProfile, loadScreeningAnswers } from "./prompt";
+import type { FormField, JobKind } from "@/db/schema";
+import { SYSTEM_PROMPT, buildUserPrompt, loadProfile, screeningAnswersForKind } from "./prompt";
 import { FALLBACK_FIELDS } from "@/lib/ats/questions";
+import { ResumePlanSchema } from "@/lib/resume/llm-plan";
 
 const MODEL = process.env.ANTHROPIC_MODEL ?? "claude-opus-4-8";
 
 const ResultSchema = z.object({
   coverLetterMd: z.string(),
   qa: z.array(z.object({ question: z.string(), answer: z.string() })),
+  resumePlan: ResumePlanSchema,
 });
 
 export type TailorResult = z.infer<typeof ResultSchema>;
@@ -30,6 +32,7 @@ export async function generateDraft(args: {
   title: string;
   locationRaw: string;
   jdText: string;
+  kind?: JobKind | string | null;
   formFields?: FormField[] | null;
   formSource?: "greenhouse" | "fallback";
 }): Promise<{ result: TailorResult; model: string }> {
@@ -38,13 +41,14 @@ export async function generateDraft(args: {
   }
   const client = new Anthropic();
   const profile = loadProfile();
-  const screening = loadScreeningAnswers();
+  const screening = screeningAnswersForKind(args.kind);
 
   const userText = buildUserPrompt({
     company: args.company,
     title: args.title,
     locationRaw: args.locationRaw,
     jdText: args.jdText,
+    kind: args.kind,
     screeningAnswers: screening,
     formFields: args.formFields && args.formFields.length > 0 ? args.formFields : FALLBACK_FIELDS,
     formSource: args.formSource ?? "fallback",

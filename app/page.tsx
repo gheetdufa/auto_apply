@@ -5,6 +5,7 @@ import { desc, eq, and, isNull, isNotNull, inArray } from "drizzle-orm";
 import { RefreshButton } from "./_components/refresh-button";
 import { StatusFilters, VIEWS, type ViewKey } from "./_components/status-filters";
 import { SetupBanner } from "./_components/setup-banner";
+import { SourcesPanel } from "./_components/sources-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   const open = inArray(jobs.status, ["discovered", "drafted"]);
   const rows =
     view === "inbox"
-      ? await base.where(and(open, isNull(jobs.closedAt))).orderBy(desc(jobs.firstSeenAt)).limit(300)
+      ? await base.where(and(open, isNull(jobs.closedAt))).orderBy(desc(jobs.firstSeenAt)).limit(800)
       : view === "closed"
         ? await base.where(and(open, isNotNull(jobs.closedAt))).orderBy(desc(jobs.closedAt)).limit(300)
         : await base.where(eq(jobs.status, view)).orderBy(desc(jobs.updatedAt)).limit(300);
@@ -53,10 +54,20 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
             New-grad SWE + internships · SF / NYC / Remote-US · sorted by release
           </p>
         </div>
-        <RefreshButton />
+        <div className="flex items-center gap-4">
+          <Link
+            href="/resume"
+            className="text-sm text-[color:var(--color-muted)] hover:text-[color:var(--color-accent)]"
+          >
+            resume
+          </Link>
+          <RefreshButton />
+        </div>
       </header>
 
       <SetupBanner />
+
+      <SourcesPanel />
 
       <StatusFilters current={view} />
 

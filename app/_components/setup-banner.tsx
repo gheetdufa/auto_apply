@@ -23,12 +23,22 @@ export function SetupBanner() {
   if (!existsSync("./data/resume.pdf")) {
     missing.push({
       what: "data/resume.pdf",
-      fix: "drop your resume PDF here (referenced in answers for attachment fields)",
+      fix: "pnpm resume:build (or drop your PDF here) — new-grad applications attach this file",
     });
   }
 
-  if (missing.length === 0) return null;
-
+  if (missing.length === 0) {
+    if (!existsSync("./data/resume-internship.pdf")) {
+      return (
+        <div className="mb-5 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-[color:var(--color-muted)]">
+          Tip: run <span className="font-mono text-[13px]">pnpm resume:build</span> to also generate{" "}
+          <span className="font-mono text-[13px]">data/resume-internship.pdf</span> (B.S./M.S., May 2028) for
+          internship applications.
+        </div>
+      );
+    }
+    return null;
+  }
   return (
     <div className="mb-5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
       <div className="flex items-center gap-2 font-medium text-amber-400">

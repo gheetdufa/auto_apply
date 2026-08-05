@@ -11,8 +11,10 @@ export function normalizeCompany(name: string): string {
 export function normalizeTitle(title: string): string {
   return title
     .toLowerCase()
+    // Keep intern / co-op / new-grad tokens — firms like Jane Street reuse the
+    // same base title across employment types (metadata-only distinction).
     .replace(/[^a-z0-9 ]+/g, " ")
-    .replace(/\b(20\d{2}|i{2,3}|sr|jr|new grad|university|college|summer|fall|spring|winter|intern(ship)?)\b/g, " ")
+    .replace(/\b(20\d{2}|i{2,3}|sr|jr|university|college|summer|fall|spring|winter|full[\s-]?time|experienced)\b/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }

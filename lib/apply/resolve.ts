@@ -30,8 +30,9 @@ export async function resolveFieldsWithClaude(args: {
   const system = `You fill real job-application form fields for a candidate. You get the live form fields (with exact options where applicable) plus the candidate's contact info, canonical screening answers, an already-tailored Q&A draft, and a tailored cover letter.
 
 Rules:
-- For select/radio/checkbox/combobox fields: the answer MUST be exactly one of the provided options, character-for-character (for checkbox groups, a comma-separated subset). If options are not provided (combobox), give the most standard short value (e.g. "United States", "Yes", "No").
+- For select/radio/checkbox/combobox fields: the answer MUST be exactly one of the provided options, character-for-character (for checkbox groups, a comma-separated subset). If options are not provided: for a large school/university dropdown use contact.school (closest official name); for combobox/location give a short standard value; otherwise answer from contact/draft.
 - A checkbox with a SINGLE option is a boolean toggle: answer "Yes" to tick it (e.g. "are you authorized to work" when the candidate is), null to leave it unticked (e.g. "do you require sponsorship" when they don't).
+- Language skill checkboxes: pick languages the candidate actually speaks from the options (at minimum English when listed).
 - Contact/identity fields: use the contact JSON verbatim. Never invent contact info.
 - Demographic/EEOC (gender, race, ethnicity, veteran, disability, orientation): ALWAYS pick the decline/prefer-not-to-answer option when one exists. If no decline option exists, answer null (leave it blank) — never assert demographic facts not in the canonical answers.
 - Free text: reuse the tailored Q&A draft when a question matches; otherwise write 1-3 grounded sentences in the candidate's voice. A "cover letter" or "additional information" textarea gets the cover letter text.

@@ -134,7 +134,7 @@ Items marked [HN JOB POST] are YC-startup job posts: extract company from the ti
   const newJobIds: number[] = [];
   for (const p of found) {
     if (!isTarget(classify(p.location))) continue;
-    if (isBlockedCompany(p.company)) continue;
+    if (isBlockedCompany(p.company, { title: p.title })) continue;
     const key = dedupeKey(p.company, p.title, p.location);
     if (existingKeys.has(key)) continue;
     const ck = coarseKey(p.company, p.title, classify(p.location));

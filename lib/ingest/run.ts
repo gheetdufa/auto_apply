@@ -134,7 +134,7 @@ export async function runIngest(): Promise<IngestResult> {
   // Chicago), split into new vs. already-known using one pass over existing keys.
   const targets = [...collected.entries()].filter(
     ([, row]) =>
-      !isBlockedCompany(row.company) &&
+      !isBlockedCompany(row.company, { title: row.title }) &&
       (isTarget(classify(row.locationRaw)) ||
         ((QUANT_TITLE_RE.test(row.title) || row.quantFirm === true) && isQuantHub(row.locationRaw))),
   );
